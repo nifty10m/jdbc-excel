@@ -1,4 +1,4 @@
-package excelwriter;
+package de.xm.jdbcexcel;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.common.usermodel.HyperlinkType;

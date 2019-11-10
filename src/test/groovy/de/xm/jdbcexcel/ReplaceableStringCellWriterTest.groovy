@@ -1,4 +1,4 @@
-package excelwriter
+package de.xm.jdbcexcel
 
 import spock.lang.Specification
 

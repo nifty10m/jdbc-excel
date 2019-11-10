@@ -1,4 +1,4 @@
-package excelwriter;
+package de.xm.jdbcexcel;
 
 import static java.util.Collections.emptyMap;
 

@@ -1,4 +1,4 @@
-package excelwriter;
+package de.xm.jdbcexcel;
 
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Workbook;
