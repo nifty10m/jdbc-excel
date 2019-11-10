@@ -1,0 +1,29 @@
+# See http://help.github.com/ignore-files/ for more about ignoring files.
+
+# dependencies
+.gradle
+.gradletasknamecache
+gradle.properties
+
+# created on circle ci
+secring.gpg
+
+# compiled output
+/build
+/out
+tmp
+
+# coverage report
+coverage
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+
+# System Files
+.DS_Store
+Thumbs.db

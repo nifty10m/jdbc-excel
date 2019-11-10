@@ -1,0 +1,100 @@
+plugins {
+    // Apply the groovy plugin to add support for Groovy
+    id 'groovy'
+    id 'java-library'
+    id 'maven-publish'
+    id 'signing'
+    id 'com.palantir.git-version' version '0.12.0-rc1'
+}
+
+repositories {
+    // Use jcenter for resolving your dependencies.
+    // You can declare any Maven/Ivy/file repository here.
+    mavenCentral()
+}
+
+group = 'io.github.nifty10m.jdbc-excel'
+version = gitVersion()
+
+dependencies {
+    compileOnly 'org.projectlombok:lombok:1.18.10'
+    annotationProcessor 'org.projectlombok:lombok:1.18.10'
+
+    implementation 'org.slf4j:slf4j-api:1.7.25'
+    implementation 'org.springframework:spring-jdbc:5.2.0.RELEASE'
+
+    // poi excel export
+    implementation 'org.apache.poi:poi:4.1.1'
+    implementation 'org.apache.poi:poi-ooxml:4.1.1'
+
+    // Use the awesome Spock testing and specification framework
+    testImplementation 'org.spockframework:spock-core:1.2-groovy-2.5'
+}
+
+task javadocJar(type: Jar) {
+    archiveClassifier = 'javadoc'
+    from javadoc
+}
+
+task sourcesJar(type: Jar) {
+    archiveClassifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId = 'jdbc-excel'
+            groupId = 'io.github.nifty10m'
+            artifact sourcesJar
+            artifact javadocJar
+            versionMapping {
+                usage('java-api') {
+                    fromResolutionOf('runtimeClasspath')
+                }
+                usage('java-runtime') {
+                    fromResolutionResult()
+                }
+            }
+            pom {
+                name = 'jdbc-excel'
+                description = 'A library to create excel from jdbc'
+                url = "https://www.github.com/nifty10m/jdbc-excel"
+                licenses {
+                    license {
+                        name = "MIT License"
+                        url = "http://www.opensource.org/licenses/mit-license.php"
+                    }
+                }
+                developers {
+                    developer {
+                        id = "terrible_herbst"
+                        name = "Joerg Herbst"
+                        email = "joerg.herbst@10m.de"
+                    }
+                }
+                scm {
+                    connection = "scm:git:git://github.com/nifty10m/jdbc-excel.git"
+                    developerConnection = "scm:git:ssh://git@github.com:nifty10m/jdbc-excel.git"
+                    url = "https://www.github.com/nifty10m/jdbc-excel"
+                }
+            }
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            def snapshotRepoUrl =  "https://oss.sonatype.org/content/repositories/snapshots/"
+            def releaseRepoUrl = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
+            url = version.matches("\\d\\.\\d\\.\\d") ? releaseRepoUrl : snapshotRepoUrl
+            credentials {
+                username System.getenv("SONATYPE_USER")
+                password System.getenv("SONATYPE_PASSWORD")
+            }
+        }
+    }
+}
+
+signing {
+    sign publishing.publications.mavenJava
+}
