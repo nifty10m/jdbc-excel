@@ -31,6 +31,7 @@ public class ReplaceableStringCellWriter extends StringCellWriter {
         for (Map.Entry<String, String> entry : replacement.entrySet()) {
             result = StringUtils.replace(result, "{" + entry.getKey() + "}", entry.getValue());
         }
+        log.trace("Created text of '{}' after replacing '{}' with values of {}", result, input, replacement);
         return result;
     }
 }
