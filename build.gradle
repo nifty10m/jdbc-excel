@@ -25,7 +25,7 @@ dependencies {
     implementation 'org.slf4j:slf4j-api:1.7.29'
     implementation 'org.springframework:spring-jdbc:5.2.0.RELEASE'
 
-    testRuntime 'com.h2database:h2:1.4.196'
+    testRuntime 'com.h2database:h2:1.4.200'
 
     // poi excel export
     implementation 'org.apache.poi:poi:4.1.1'
