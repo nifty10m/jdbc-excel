@@ -8,11 +8,17 @@ import java.util.Date;
 
 public class DateCellWriter extends AbstractCellWriter<Date> {
 
+    private CellStyle dateCellStyle;
+
     @Override
     public void doWriteCell(Workbook workbook, Cell cell, Date cellValue) {
         cell.setCellValue(cellValue);
-        CellStyle dateCellStyle = workbook.createCellStyle();
-        dateCellStyle.setDataFormat(workbook.createDataFormat().getFormat("dd.MM.yyyy"));
+        synchronized (this) {
+            if (dateCellStyle == null) {
+                dateCellStyle = workbook.createCellStyle();
+                dateCellStyle.setDataFormat(workbook.createDataFormat().getFormat("dd.MM.yyyy"));
+            }
+        }
         cell.setCellStyle(dateCellStyle);
     }
 
