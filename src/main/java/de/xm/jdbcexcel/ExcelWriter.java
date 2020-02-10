@@ -19,7 +19,6 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +38,8 @@ public class ExcelWriter {
     public ExcelWriter(JdbcTemplate template, Map<String, String> replacements) {
         this.template = template;
         writers = new LinkedHashMap<>();
-        writers.put(Date.class, new DateCellWriter());
+        writers.put(java.util.Date.class, new DateCellWriter());
+        writers.put(java.sql.Date.class, new SqlDateCellWriter());
         writers.put(String.class, new ReplaceableStringCellWriter(replacements));
         writers.put(BigDecimal.class, new BigDecimalCellWriter());
         writers.put(Number.class, new NumberCellWriter());
