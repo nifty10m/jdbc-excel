@@ -5,7 +5,7 @@ name: Release to Bintray
 
 on:
   release:
-    branches: [ master ]
+    types: [published]
 
 jobs:
   build:
