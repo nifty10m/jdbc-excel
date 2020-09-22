@@ -50,36 +50,36 @@ public class ExcelWriter {
     }
 
     public byte[] createExcel(List<ExcelTab> exportTabs) throws IOException {
-        SXSSFWorkbook workbook = new SXSSFWorkbook(ROWS_IN_MEMORY);
-        exportTabs.forEach((tab) -> {
-            log.debug("Adding sheet {}", tab.getName());
-            SXSSFSheet fieldSheet = workbook.createSheet(tab.getName());
-            fieldSheet.trackAllColumnsForAutoSizing();
-            List<Object> arguments = tab.getParameter();
+        try (SXSSFWorkbook workbook = new SXSSFWorkbook(ROWS_IN_MEMORY)) {
+            exportTabs.forEach((tab) -> {
+                log.debug("Adding sheet {}", tab.getName());
+                SXSSFSheet fieldSheet = workbook.createSheet(tab.getName());
+                fieldSheet.trackAllColumnsForAutoSizing();
+                List<Object> arguments = tab.getParameter();
 
-            String sqlStatement = tab.getSql();
-            int paramCount = 0;
-            for (int start = sqlStatement.indexOf('?'); start >= 0; start = sqlStatement.indexOf('?', start + 1)) {
-                paramCount++;
-            }
-            if (paramCount == arguments.size()) {
-                log.debug("Adding {} as parameters to query", arguments);
-                addTab(workbook, fieldSheet, sqlStatement, arguments.toArray());
-            } else {
-                log.warn("Unable to add sheet {} cause {} are required but {} given", tab, arguments, paramCount);
-            }
+                String sqlStatement = tab.getSql();
+                int paramCount = 0;
+                for (int start = sqlStatement.indexOf('?'); start >= 0; start = sqlStatement.indexOf('?', start + 1)) {
+                    paramCount++;
+                }
+                if (paramCount == arguments.size()) {
+                    log.debug("Adding {} as parameters to query", arguments);
+                    addTab(workbook, fieldSheet, sqlStatement, arguments.toArray());
+                } else {
+                    log.warn("Unable to add sheet {} cause {} are required but {} given", tab, arguments, paramCount);
+                }
 
-        });
+            });
 
-        byte[] byteArray = createByteArray(workbook);
-        workbook.dispose();
-        return byteArray;
+            return createByteArray(workbook);
+        }
     }
 
     protected byte[] createByteArray(SXSSFWorkbook workbook) throws IOException {
-        ByteArrayOutputStream stream = new ByteArrayOutputStream(1_000_000);
-        workbook.write(stream);
-        return stream.toByteArray();
+        try (ByteArrayOutputStream stream = new ByteArrayOutputStream(1_000_000)) {
+            workbook.write(stream);
+            return stream.toByteArray();
+        }
     }
 
     protected void addTab(SXSSFWorkbook workbook, SXSSFSheet exportSheet, String sql, Object[] arguments) {
