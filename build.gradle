@@ -3,7 +3,7 @@ plugins {
     id 'groovy'
     id 'java-library'
     id 'maven-publish'
-    id 'signing'
+    id "com.jfrog.bintray" version "1.8.4"
     id 'com.palantir.git-version' version '0.12.2'
 }
 
@@ -50,60 +50,60 @@ task sourcesJar(type: Jar) {
     from sourceSets.main.allSource
 }
 
-publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            artifactId = 'jdbc-excel'
-            groupId = 'io.github.nifty10m'
-            artifact sourcesJar
-            artifact javadocJar
-            versionMapping {
-                usage('java-api') {
-                    fromResolutionOf('runtimeClasspath')
-                }
-                usage('java-runtime') {
-                    fromResolutionResult()
-                }
-            }
-            pom {
-                name = 'jdbc-excel'
-                description = 'A library to create excel from jdbc'
-                url = "https://www.github.com/nifty10m/jdbc-excel"
-                licenses {
-                    license {
-                        name = "MIT License"
-                        url = "http://www.opensource.org/licenses/mit-license.php"
-                    }
-                }
-                developers {
-                    developer {
-                        id = "terrible_herbst"
-                        name = "Joerg Herbst"
-                        email = "joerg.herbst@10m.de"
-                    }
-                }
-                scm {
-                    connection = "scm:git:git://github.com/nifty10m/jdbc-excel.git"
-                    developerConnection = "scm:git:ssh://git@github.com:nifty10m/jdbc-excel.git"
-                    url = "https://www.github.com/nifty10m/jdbc-excel"
-                }
-            }
-            from components.java
+def pomConfig = {
+    licenses {
+        license {
+            name = "MIT License"
+            url = "http://www.opensource.org/licenses/mit-license.php"
         }
     }
-    repositories {
-        maven {
-            def snapshotRepoUrl =  "https://oss.sonatype.org/content/repositories/snapshots/"
-            def releaseRepoUrl = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
-            url = version.matches("\\d\\.\\d\\.\\d") ? releaseRepoUrl : snapshotRepoUrl
-            credentials {
-                username System.getenv("SONATYPE_USER")
-                password System.getenv("SONATYPE_PASSWORD")
+    developers {
+        developer {
+            id = "terrible_herbst"
+            name = "Joerg Herbst"
+            email = "joerg.herbst@newcubator.de"
+        }
+    }
+
+    scm {
+        url "https://bintray.com/newcubator/jdbc-excel"
+    }
+}
+
+publishing {
+    publications {
+        JdbcExcelPublication(MavenPublication) {
+            from components.java
+            artifact sourcesJar
+            artifact javadocJar
+            groupId 'de.newcubator'
+            artifactId 'jdbc-excel'
+            version project.getVersion()
+            pom.withXml {
+                def root = asNode()
+                root.appendNode('description', 'A library to create excel from jdbc')
+                root.appendNode('name', 'jdbc-excel')
+                root.appendNode('url', 'https://github.com/newcubator/jdbc-excel')
+                root.children().last() + pomConfig
             }
         }
     }
 }
 
-signing {
-    sign publishing.publications.mavenJava
+bintray {
+    user = System.getenv('BINTRAY_USER')
+    key = System.getenv('BINTRAY_KEY')
+    publications = ['JdbcExcelPublication']
+    pkg {
+        repo = 'jdbc-excel'
+        name = 'jdbc-excel'
+        licenses = ['MIT']
+        vcsUrl = 'https://github.com/newcubator/jdbc-excel'
+        version {
+            name = project.getVersion()
+            desc = 'A library to create excel from jdbc'
+            released = new Date()
+            vcsTag = project.getVersion()
+        }
+    }
 }
