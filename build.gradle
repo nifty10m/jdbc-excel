@@ -1,5 +1,4 @@
 plugins {
-    // Apply the groovy plugin to add support for Groovy
     id 'groovy'
     id 'java-library'
     id 'maven-publish'
@@ -53,20 +52,20 @@ task sourcesJar(type: Jar) {
 def pomConfig = {
     licenses {
         license {
-            name = "MIT License"
-            url = "http://www.opensource.org/licenses/mit-license.php"
+            name "MIT License"
+            url "http://www.opensource.org/licenses/mit-license.php"
         }
     }
     developers {
         developer {
-            id = "terrible_herbst"
-            name = "Joerg Herbst"
-            email = "joerg.herbst@newcubator.de"
+            id "terrible_herbst"
+            name "Joerg Herbst"
+            email "joerg.herbst@newcubator.de"
         }
     }
 
     scm {
-        url "https://bintray.com/newcubator/jdbc-excel"
+        url "https://github.com/newcubator/jdbc-excel"
     }
 }
 
@@ -97,6 +96,7 @@ bintray {
     pkg {
         repo = 'jdbc-excel'
         name = 'jdbc-excel'
+        userOrg = 'newcubator'
         licenses = ['MIT']
         vcsUrl = 'https://github.com/newcubator/jdbc-excel'
         version {
