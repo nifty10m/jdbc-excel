@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +31,7 @@ public class ExcelWriter {
 
     protected final JdbcTemplate template;
     protected final LinkedHashMap<Class<?>, CellWriter> writers;
+    protected final Map<String, Class<?>> resolvedColumnTypes;
 
     public ExcelWriter(JdbcTemplate template) {
         this(template, emptyMap());
@@ -43,6 +45,8 @@ public class ExcelWriter {
         writers.put(String.class, new ReplaceableStringCellWriter(replacements));
         writers.put(BigDecimal.class, new BigDecimalCellWriter());
         writers.put(Number.class, new NumberCellWriter());
+
+        resolvedColumnTypes = new HashMap<>();
     }
 
     public byte[] createExcel(ExcelTab exportTab) throws IOException {
@@ -68,7 +72,6 @@ public class ExcelWriter {
                 } else {
                     log.warn("Unable to add sheet {} cause {} are required but {} given", tab, arguments, paramCount);
                 }
-
             });
 
             return createByteArray(workbook);
@@ -87,7 +90,7 @@ public class ExcelWriter {
         template.query(
             sql,
             new ArgumentPreparedStatementSetter(arguments),
-            new ExportCallbackHandler(workbook, exportSheet, writers)
+            new ExportCallbackHandler(workbook, exportSheet, writers, resolvedColumnTypes)
         );
     }
 
@@ -96,11 +99,16 @@ public class ExcelWriter {
         private final SXSSFWorkbook workbook;
         private final SXSSFSheet exportSheet;
         final LinkedHashMap<Class<?>, CellWriter> writers;
+        final Map<String, Class<?>> resolvedColumnTypes;
 
-        ExportCallbackHandler(SXSSFWorkbook workbook, SXSSFSheet exportSheet, LinkedHashMap<Class<?>, CellWriter> writers) {
+        ExportCallbackHandler(SXSSFWorkbook workbook,
+                              SXSSFSheet exportSheet,
+                              LinkedHashMap<Class<?>, CellWriter> writers,
+                              Map<String, Class<?>> resolvedColumnTypes) {
             this.workbook = workbook;
             this.exportSheet = exportSheet;
             this.writers = writers;
+            this.resolvedColumnTypes = resolvedColumnTypes;
         }
 
         @Override
@@ -123,7 +131,12 @@ public class ExcelWriter {
             }
         }
 
-        private <T> void writeRow(@NonNull ResultSet rs, ResultSetMetaData metaData, int row, SXSSFRow excelRow, SXSSFRow headerRow, int i) throws SQLException {
+        private <T> void writeRow(@NonNull ResultSet rs,
+                                  ResultSetMetaData metaData,
+                                  int row,
+                                  SXSSFRow excelRow,
+                                  SXSSFRow headerRow,
+                                  int i) throws SQLException {
             if (row == 1) {
                 createHeaderColumn(metaData, headerRow, i, workbook);
             }
@@ -137,10 +150,12 @@ public class ExcelWriter {
 
         @SuppressWarnings("unchecked")
         private <T> Class<T> resolveClassByName(String className) {
-            return (Class<T>) ClassUtils.resolveClassName(className, this.getClass().getClassLoader());
+            return (Class<T>) resolvedColumnTypes.computeIfAbsent(className,
+                absentClassName -> ClassUtils.resolveClassName(className, this.getClass().getClassLoader()));
         }
 
-        protected void createHeaderColumn(ResultSetMetaData metaData, SXSSFRow headerRow, int column, SXSSFWorkbook workbook) throws SQLException {
+        protected void createHeaderColumn(ResultSetMetaData metaData, SXSSFRow headerRow, int column, SXSSFWorkbook workbook) throws
+            SQLException {
             String columnName = metaData.getColumnName(column + 1);
             String columnLabel = metaData.getColumnLabel(column + 1);
             String columnHeader = StringUtils.isEmpty(columnLabel) ? columnName : columnLabel;
@@ -158,13 +173,13 @@ public class ExcelWriter {
 
         @SuppressWarnings("unchecked")
         private <T> CellWriter<T> findCellWriter(Class<T> clazz) {
-            return writers.entrySet().stream()
-                .filter(entry -> entry.getKey().isAssignableFrom(clazz))
-                .map(Map.Entry::getValue)
-                .findFirst()
-                .orElseGet(ObjectCellWriter::new);
+            return writers.computeIfAbsent(clazz,
+                absentClazz -> writers.entrySet().stream()
+                    .filter(entry -> entry.getKey().isAssignableFrom(absentClazz))
+                    .map(Map.Entry::getValue)
+                    .findFirst()
+                    .orElseGet(ObjectCellWriter::new)
+            );
         }
-
     }
-
 }
