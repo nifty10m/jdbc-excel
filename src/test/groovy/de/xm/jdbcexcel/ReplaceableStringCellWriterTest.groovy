@@ -1,5 +1,6 @@
 package de.xm.jdbcexcel
 
+import de.xm.jdbcexcel.cellwriters.ReplaceableStringCellWriter
 import spock.lang.Specification
 
 

@@ -1,0 +1,3 @@
+spring:
+  datasource:
+    url: "jdbc:tc:postgresql:10.2:///postgres?TC_INITSCRIPT=data.sql"

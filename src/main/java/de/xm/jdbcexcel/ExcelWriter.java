@@ -2,6 +2,14 @@ package de.xm.jdbcexcel;
 
 import static java.util.Collections.emptyMap;
 
+import de.xm.jdbcexcel.cellwriters.BigDecimalCellWriter;
+import de.xm.jdbcexcel.cellwriters.CellWriter;
+import de.xm.jdbcexcel.cellwriters.DateCellWriter;
+import de.xm.jdbcexcel.cellwriters.NumberCellWriter;
+import de.xm.jdbcexcel.cellwriters.ObjectCellWriter;
+import de.xm.jdbcexcel.cellwriters.ReplaceableStringCellWriter;
+import de.xm.jdbcexcel.tabs.ExcelTab;
+
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.xssf.streaming.SXSSFRow;
 import org.apache.poi.xssf.streaming.SXSSFSheet;
@@ -10,7 +18,6 @@ import org.springframework.jdbc.core.ArgumentPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.lang.NonNull;
-import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
 
 import java.io.ByteArrayOutputStream;
@@ -19,6 +26,7 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,10 +49,9 @@ public class ExcelWriter {
         this.template = template;
         writers = new LinkedHashMap<>();
         writers.put(java.util.Date.class, new DateCellWriter());
-        writers.put(java.sql.Date.class, new SqlDateCellWriter());
         writers.put(String.class, new ReplaceableStringCellWriter(replacements));
-        writers.put(BigDecimal.class, new BigDecimalCellWriter());
         writers.put(Number.class, new NumberCellWriter());
+        writers.put(BigDecimal.class, new BigDecimalCellWriter());
 
         resolvedColumnTypes = new HashMap<>();
     }
@@ -57,25 +64,27 @@ public class ExcelWriter {
         try (SXSSFWorkbook workbook = new SXSSFWorkbook(ROWS_IN_MEMORY)) {
             exportTabs.forEach((tab) -> {
                 log.debug("Adding sheet {}", tab.getName());
-                SXSSFSheet fieldSheet = workbook.createSheet(tab.getName());
-                fieldSheet.trackAllColumnsForAutoSizing();
-                List<Object> arguments = tab.getParameter();
 
-                String sqlStatement = tab.getSql();
-                int paramCount = 0;
-                for (int start = sqlStatement.indexOf('?'); start >= 0; start = sqlStatement.indexOf('?', start + 1)) {
-                    paramCount++;
-                }
-                if (paramCount == arguments.size()) {
+                SXSSFSheet fieldSheet = workbook.createSheet(tab.getName());
+
+                List<Object> arguments = tab.getParameter();
+                String sql = tab.getSql();
+
+                if (checkParameterCount(sql, arguments.size())) {
                     log.debug("Adding {} as parameters to query", arguments);
-                    addTab(workbook, fieldSheet, sqlStatement, arguments.toArray());
+                    addTab(workbook, fieldSheet, sql, arguments.toArray());
                 } else {
-                    log.warn("Unable to add sheet {} cause {} are required but {} given", tab, arguments, paramCount);
+                    log.warn("Unable to add sheet {} cause {} are required but {} given", tab, arguments, arguments.size());
                 }
             });
 
             return createByteArray(workbook);
         }
+    }
+
+    protected boolean checkParameterCount(String sqlStatement, int actualParameterCount) {
+        int paramCount = StringUtils.countOccurrencesOf(sqlStatement, "?");
+        return paramCount == actualParameterCount;
     }
 
     protected byte[] createByteArray(SXSSFWorkbook workbook) throws IOException {
@@ -101,6 +110,8 @@ public class ExcelWriter {
         final LinkedHashMap<Class<?>, CellWriter> writers;
         final Map<String, Class<?>> resolvedColumnTypes;
 
+        int[] maxColumnWidths;
+
         ExportCallbackHandler(SXSSFWorkbook workbook,
                               SXSSFSheet exportSheet,
                               LinkedHashMap<Class<?>, CellWriter> writers,
@@ -114,61 +125,91 @@ public class ExcelWriter {
         @Override
         public void processRow(@NonNull ResultSet rs) throws SQLException {
             ResultSetMetaData metaData = rs.getMetaData();
-            int row = rs.getRow();
-            log.trace("Adding row {} to excel sheet", row);
-            SXSSFRow excelRow = exportSheet.createRow(row);
-            int columns = metaData.getColumnCount();
-            SXSSFRow headerRow = null;
-            if (row == 1) {
-                headerRow = exportSheet.createRow(0);
+
+            int rowIndex = rs.getRow();
+            log.trace("Adding row {} to excel sheet", rowIndex);
+
+            if (rowIndex == 1) {
+                maxColumnWidths = new int[metaData.getColumnCount()];
+                writeHeaderRow(metaData, maxColumnWidths);
             }
-            for (int i = 0; i < columns; i++) {
-                writeRow(rs, metaData, row, excelRow, headerRow, i);
-            }
-            if (row == 499 || (row < 499 && rs.isLast())) {
-                log.info("Resizing first {} rows ", row);
-                resizeRows(columns, exportSheet);
+
+            writeRow(rs, metaData, maxColumnWidths);
+
+            if (rs.isLast()) {
+                resizeRows(exportSheet, maxColumnWidths);
             }
         }
 
-        private <T> void writeRow(@NonNull ResultSet rs,
-                                  ResultSetMetaData metaData,
-                                  int row,
-                                  SXSSFRow excelRow,
-                                  SXSSFRow headerRow,
-                                  int i) throws SQLException {
-            if (row == 1) {
-                createHeaderColumn(metaData, headerRow, i, workbook);
-            }
-            String className = metaData.getColumnClassName(i + 1);
-            Class<T> clazz = resolveClassByName(className);
-            T object = rs.getObject(i + 1, clazz);
-            CellWriter<T> writer = findCellWriter(clazz);
-            log.trace("Found {} for {}", writer.getClass().getSimpleName(), clazz);
-            writer.writeCellValue(workbook, excelRow, i, object);
-        }
-
-        @SuppressWarnings("unchecked")
-        private <T> Class<T> resolveClassByName(String className) {
-            return (Class<T>) resolvedColumnTypes.computeIfAbsent(className,
-                absentClassName -> ClassUtils.resolveClassName(className, this.getClass().getClassLoader()));
-        }
-
-        protected void createHeaderColumn(ResultSetMetaData metaData, SXSSFRow headerRow, int column, SXSSFWorkbook workbook) throws
+        protected void writeHeaderRow(ResultSetMetaData metaData, int[] maxColumnWidths) throws
             SQLException {
-            String columnName = metaData.getColumnName(column + 1);
-            String columnLabel = metaData.getColumnLabel(column + 1);
-            String columnHeader = StringUtils.isEmpty(columnLabel) ? columnName : columnLabel;
-            log.debug("Adding column {}", columnHeader);
-            StringCellWriter headerCellWriter = new StringCellWriter();
-            headerCellWriter.writeCellValue(workbook, headerRow, column, columnHeader);
+
+            SXSSFRow headerRow = exportSheet.createRow(0);
+
+            for (int i = 1; i <= metaData.getColumnCount(); i++) {
+                String columnHeader = metaData.getColumnLabel(i);
+
+                // header row is always first so we dont have to worry about overwriting something
+                maxColumnWidths[i - 1] = columnHeader.length();
+
+                CellWriter<String> stringCellWriter = (CellWriter<String>) writers.get(String.class);
+                stringCellWriter.writeCellValue(workbook, headerRow, i - 1, columnHeader);
+            }
         }
 
-        protected void resizeRows(int columns, SXSSFSheet exportSheet) {
-            for (int i = 0; i < columns; i++) {
-                exportSheet.autoSizeColumn(i);
+        private void writeRow(ResultSet rs, ResultSetMetaData metaData, int[] maxColumnWidths) throws SQLException {
+            SXSSFRow excelRow = exportSheet.createRow(rs.getRow());
+
+            for (int i = 1; i <= metaData.getColumnCount(); i++) {
+                maxColumnWidths[i - 1] = Math.max(
+                    maxColumnWidths[i - 1],
+                    writeColumnValue(rs, metaData, excelRow, i)
+                );
             }
-            exportSheet.untrackAllColumnsForAutoSizing();
+        }
+
+        /**
+         * Writes a cell value identified by the current row and columnIndex to the excel sheet
+         * and returns the length of the written value in characters
+         */
+        private <T> int writeColumnValue(ResultSet rs, ResultSetMetaData metaData, SXSSFRow excelRow, int columnIndex) throws SQLException {
+            T columnValue = getAsType(rs, metaData, columnIndex);
+            CellWriter<T> cellWriter = (CellWriter<T>) findCellWriter(columnValue.getClass());
+            return cellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, columnValue);
+        }
+
+        private <T> T getAsType(ResultSet rs, ResultSetMetaData metaData, int columnIndex) throws SQLException {
+            switch (metaData.getColumnType(columnIndex)) {
+                case Types.VARCHAR:
+                case Types.NULL:
+                case Types.CHAR:
+                    return (T) rs.getString(columnIndex);
+
+                case Types.DATE:
+                case Types.TIMESTAMP:
+                case Types.TIMESTAMP_WITH_TIMEZONE:
+                case Types.TIME:
+                case Types.TIME_WITH_TIMEZONE:
+                    return (T) rs.getDate(columnIndex);
+
+                case Types.DOUBLE:
+                case Types.INTEGER:
+                case Types.SMALLINT:
+                case Types.DECIMAL:
+                case Types.FLOAT:
+                    return (T) (Double) rs.getDouble(columnIndex);
+
+                case Types.BIGINT:
+                case Types.NUMERIC:
+                    return (T) rs.getBigDecimal(columnIndex);
+
+                default:
+                    throw new IllegalArgumentException(String.format(
+                        "No type defined for column type %s and Jdbc type %s",
+                        metaData.getColumnClassName(columnIndex),
+                        metaData.getColumnType(columnIndex)
+                    ));
+            }
         }
 
         @SuppressWarnings("unchecked")
@@ -180,6 +221,25 @@ public class ExcelWriter {
                     .findFirst()
                     .orElseGet(ObjectCellWriter::new)
             );
+        }
+
+        private void resizeRows(SXSSFSheet exportSheet, int[] maxColumnWidths) {
+            for (int i = 0; i < maxColumnWidths.length; i++) {
+                exportSheet.setColumnWidth(i, calculateColumnWidth(maxColumnWidths[i]));
+            }
+        }
+
+        /**
+         * Resize columns based on an estimated font width.
+         * Since Apache poi uses font measuring (ew), autotracking colun widths gets increasingly
+         * expensive if the count of rows grows that the measuring is based on. Additionally, we now have an
+         * implicit dependency on fonts being available to base our measurement on.
+         * This little formula just estimates the column width, which is good enough for our usecases.
+         * <p>
+         * https://stackoverflow.com/questions/18983203/how-to-speed-up-autosizing-columns-in-apache-poi#answer-19007294
+         */
+        private int calculateColumnWidth(int charCount) {
+            return ((int) (charCount * 1.14388)) * 256;
         }
     }
 }

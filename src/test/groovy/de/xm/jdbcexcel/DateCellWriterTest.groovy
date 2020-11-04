@@ -1,5 +1,6 @@
 package de.xm.jdbcexcel
 
+import de.xm.jdbcexcel.cellwriters.DateCellWriter
 import org.apache.poi.ss.usermodel.DateUtil
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import spock.lang.Specification
