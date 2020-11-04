@@ -3,11 +3,12 @@ package de.xm.jdbcexcel;
 import static java.util.Collections.emptyMap;
 
 import de.xm.jdbcexcel.cellwriters.BigDecimalCellWriter;
-import de.xm.jdbcexcel.cellwriters.CellWriter;
+import de.xm.jdbcexcel.cellwriters.BooleanCellWriter;
 import de.xm.jdbcexcel.cellwriters.DateCellWriter;
 import de.xm.jdbcexcel.cellwriters.NumberCellWriter;
 import de.xm.jdbcexcel.cellwriters.ObjectCellWriter;
 import de.xm.jdbcexcel.cellwriters.ReplaceableStringCellWriter;
+import de.xm.jdbcexcel.cellwriters.StringCellWriter;
 import de.xm.jdbcexcel.tabs.ExcelTab;
 
 import lombok.extern.slf4j.Slf4j;
@@ -22,13 +23,10 @@ import org.springframework.util.StringUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Types;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -38,8 +36,7 @@ public class ExcelWriter {
     public static final int ROWS_IN_MEMORY = 500;
 
     protected final JdbcTemplate template;
-    protected final LinkedHashMap<Class<?>, CellWriter> writers;
-    protected final Map<String, Class<?>> resolvedColumnTypes;
+    protected final Map<String, String> stringReplacements;
 
     public ExcelWriter(JdbcTemplate template) {
         this(template, emptyMap());
@@ -47,13 +44,7 @@ public class ExcelWriter {
 
     public ExcelWriter(JdbcTemplate template, Map<String, String> replacements) {
         this.template = template;
-        writers = new LinkedHashMap<>();
-        writers.put(java.util.Date.class, new DateCellWriter());
-        writers.put(String.class, new ReplaceableStringCellWriter(replacements));
-        writers.put(Number.class, new NumberCellWriter());
-        writers.put(BigDecimal.class, new BigDecimalCellWriter());
-
-        resolvedColumnTypes = new HashMap<>();
+        this.stringReplacements = replacements;
     }
 
     public byte[] createExcel(ExcelTab exportTab) throws IOException {
@@ -90,6 +81,9 @@ public class ExcelWriter {
     protected byte[] createByteArray(SXSSFWorkbook workbook) throws IOException {
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream(1_000_000)) {
             workbook.write(stream);
+
+            workbook.dispose();
+
             return stream.toByteArray();
         }
     }
@@ -99,7 +93,7 @@ public class ExcelWriter {
         template.query(
             sql,
             new ArgumentPreparedStatementSetter(arguments),
-            new ExportCallbackHandler(workbook, exportSheet, writers, resolvedColumnTypes)
+            new ExportCallbackHandler(workbook, exportSheet, stringReplacements)
         );
     }
 
@@ -107,19 +101,30 @@ public class ExcelWriter {
 
         private final SXSSFWorkbook workbook;
         private final SXSSFSheet exportSheet;
-        final LinkedHashMap<Class<?>, CellWriter> writers;
-        final Map<String, Class<?>> resolvedColumnTypes;
+
+        protected final DateCellWriter dateCellWriter;
+        protected final StringCellWriter stringCellWriter;
+        protected final ReplaceableStringCellWriter replaceableStringCellWriter;
+        protected final NumberCellWriter numberCellWriter;
+        protected final BigDecimalCellWriter bigDecimalCellWriter;
+        protected final ObjectCellWriter objectCellWriter;
+        protected final BooleanCellWriter booleanCellWriter;
 
         int[] maxColumnWidths;
 
         ExportCallbackHandler(SXSSFWorkbook workbook,
                               SXSSFSheet exportSheet,
-                              LinkedHashMap<Class<?>, CellWriter> writers,
-                              Map<String, Class<?>> resolvedColumnTypes) {
+                              Map<String, String> replacements) {
             this.workbook = workbook;
             this.exportSheet = exportSheet;
-            this.writers = writers;
-            this.resolvedColumnTypes = resolvedColumnTypes;
+
+            this.dateCellWriter = new DateCellWriter();
+            this.stringCellWriter = new StringCellWriter();
+            this.replaceableStringCellWriter = new ReplaceableStringCellWriter(replacements);
+            this.numberCellWriter = new NumberCellWriter();
+            this.bigDecimalCellWriter = new BigDecimalCellWriter();
+            this.objectCellWriter = new ObjectCellWriter();
+            this.booleanCellWriter = new BooleanCellWriter();
         }
 
         @Override
@@ -152,7 +157,6 @@ public class ExcelWriter {
                 // header row is always first so we dont have to worry about overwriting something
                 maxColumnWidths[i - 1] = columnHeader.length();
 
-                CellWriter<String> stringCellWriter = (CellWriter<String>) writers.get(String.class);
                 stringCellWriter.writeCellValue(workbook, headerRow, i - 1, columnHeader);
             }
         }
@@ -163,7 +167,7 @@ public class ExcelWriter {
             for (int i = 1; i <= metaData.getColumnCount(); i++) {
                 maxColumnWidths[i - 1] = Math.max(
                     maxColumnWidths[i - 1],
-                    writeColumnValue(rs, metaData, excelRow, i)
+                    writeCellValueWithWriter(rs, metaData, excelRow, i)
                 );
             }
         }
@@ -172,55 +176,46 @@ public class ExcelWriter {
          * Writes a cell value identified by the current row and columnIndex to the excel sheet
          * and returns the length of the written value in characters
          */
-        private <T> int writeColumnValue(ResultSet rs, ResultSetMetaData metaData, SXSSFRow excelRow, int columnIndex) throws SQLException {
-            T columnValue = getAsType(rs, metaData, columnIndex);
-            CellWriter<T> cellWriter = (CellWriter<T>) findCellWriter(columnValue.getClass());
-            return cellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, columnValue);
-        }
+        private int writeCellValueWithWriter(ResultSet rs, ResultSetMetaData metaData, SXSSFRow excelRow, int columnIndex) throws
+            SQLException {
 
-        private <T> T getAsType(ResultSet rs, ResultSetMetaData metaData, int columnIndex) throws SQLException {
             switch (metaData.getColumnType(columnIndex)) {
-                case Types.VARCHAR:
                 case Types.NULL:
+                    return stringCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, rs.getString(columnIndex));
+
+                case Types.VARCHAR:
                 case Types.CHAR:
-                    return (T) rs.getString(columnIndex);
+                case Types.LONGVARCHAR:
+                case Types.LONGNVARCHAR:
+                    return replaceableStringCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, rs.getString(columnIndex));
 
                 case Types.DATE:
                 case Types.TIMESTAMP:
                 case Types.TIMESTAMP_WITH_TIMEZONE:
                 case Types.TIME:
                 case Types.TIME_WITH_TIMEZONE:
-                    return (T) rs.getDate(columnIndex);
+                    return dateCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, rs.getDate(columnIndex));
 
                 case Types.DOUBLE:
                 case Types.INTEGER:
                 case Types.SMALLINT:
                 case Types.DECIMAL:
                 case Types.FLOAT:
-                    return (T) (Double) rs.getDouble(columnIndex);
+                case Types.TINYINT:
+                    return numberCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, rs.getDouble(columnIndex));
 
                 case Types.BIGINT:
                 case Types.NUMERIC:
-                    return (T) rs.getBigDecimal(columnIndex);
+                    return bigDecimalCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, rs.getBigDecimal(columnIndex));
 
+                case Types.BOOLEAN:
+                case Types.BIT:
+                    return booleanCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, rs.getBoolean(columnIndex));
+
+                case Types.OTHER:
                 default:
-                    throw new IllegalArgumentException(String.format(
-                        "No type defined for column type %s and Jdbc type %s",
-                        metaData.getColumnClassName(columnIndex),
-                        metaData.getColumnType(columnIndex)
-                    ));
+                    return objectCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, rs.getObject(columnIndex));
             }
-        }
-
-        @SuppressWarnings("unchecked")
-        private <T> CellWriter<T> findCellWriter(Class<T> clazz) {
-            return writers.computeIfAbsent(clazz,
-                absentClazz -> writers.entrySet().stream()
-                    .filter(entry -> entry.getKey().isAssignableFrom(absentClazz))
-                    .map(Map.Entry::getValue)
-                    .findFirst()
-                    .orElseGet(ObjectCellWriter::new)
-            );
         }
 
         private void resizeRows(SXSSFSheet exportSheet, int[] maxColumnWidths) {

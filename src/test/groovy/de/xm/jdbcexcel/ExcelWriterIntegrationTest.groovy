@@ -44,6 +44,67 @@ class ExcelWriterIntegrationTest extends Specification {
       file.delete()
   }
 
+  def "Check export of boolean column type"() {
+    given:
+      def file = new File("boolean-type.xlsx")
+      if (file.exists()) {
+        file.delete()
+      }
+    when:
+      def bytes = excel.createExcel(ExcelTab.of("Default", """
+      SELECT * FROM staff;
+      """))
+      file << bytes
+    then:
+      file.size()
+
+    cleanup:
+      file.delete()
+  }
+
+  def "Check export of null values"() {
+    given:
+      def file = new File("null-type.xlsx")
+      if (file.exists()) {
+        file.delete()
+      }
+    when:
+      def bytes = excel.createExcel(ExcelTab.of("Default", """
+      SELECT * FROM address;
+      """))
+      file << bytes
+    then:
+      file.size()
+
+    cleanup:
+      file.delete()
+  }
+
+  def "Check export of big table"() {
+    given:
+      def file = new File("much-rows-very-data-wow.xlsx")
+      if (file.exists()) {
+        file.delete()
+      }
+
+    when:
+      def thenMilis = System.currentTimeMillis()
+      def bytes = excel.createExcel(ExcelTab.of("Default", """
+      SELECT * FROM inventory i JOIN store s on i.store_id = s.store_id JOIN staff sf on sf.store_id = s.store_id;
+      """))
+      def nowMilis = System.currentTimeMillis()
+      def elapsed =  nowMilis - thenMilis;
+
+      println("Elapsed time: $elapsed ms")
+
+      file << bytes
+    then:
+      file.size()
+
+    cleanup:
+      file.delete()
+  }
+
   def "Check export of VARCHAR column type,"() {
     given:
       def file = new File("all-rows.xlsx")
