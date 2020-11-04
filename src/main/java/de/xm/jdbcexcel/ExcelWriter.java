@@ -23,6 +23,8 @@ import org.springframework.util.StringUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -110,7 +112,7 @@ public class ExcelWriter {
         protected final ObjectCellWriter objectCellWriter;
         protected final BooleanCellWriter booleanCellWriter;
 
-        int[] maxColumnWidths;
+        private int[] maxColumnWidths;
 
         ExportCallbackHandler(SXSSFWorkbook workbook,
                               SXSSFSheet exportSheet,
@@ -181,20 +183,30 @@ public class ExcelWriter {
 
             switch (metaData.getColumnType(columnIndex)) {
                 case Types.NULL:
-                    return stringCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, rs.getString(columnIndex));
+                    return 0;
 
                 case Types.VARCHAR:
                 case Types.CHAR:
                 case Types.LONGVARCHAR:
                 case Types.LONGNVARCHAR:
-                    return replaceableStringCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, rs.getString(columnIndex));
+                    String stringCellValue = rs.getString(columnIndex);
+
+                    if (!rs.wasNull()) {
+                        return replaceableStringCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, stringCellValue);
+                    }
+                    return 0;
 
                 case Types.DATE:
                 case Types.TIMESTAMP:
                 case Types.TIMESTAMP_WITH_TIMEZONE:
                 case Types.TIME:
                 case Types.TIME_WITH_TIMEZONE:
-                    return dateCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, rs.getDate(columnIndex));
+                    Date dateCellValue = rs.getDate(columnIndex);
+
+                    if (!rs.wasNull()) {
+                        return dateCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, dateCellValue);
+                    }
+                    return 0;
 
                 case Types.DOUBLE:
                 case Types.INTEGER:
@@ -202,19 +214,39 @@ public class ExcelWriter {
                 case Types.DECIMAL:
                 case Types.FLOAT:
                 case Types.TINYINT:
-                    return numberCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, rs.getDouble(columnIndex));
+                    double doubleCellValue = rs.getDouble(columnIndex);
+
+                    if (!rs.wasNull()) {
+                        return numberCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, doubleCellValue);
+                    }
+                    return 0;
 
                 case Types.BIGINT:
                 case Types.NUMERIC:
-                    return bigDecimalCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, rs.getBigDecimal(columnIndex));
+                    BigDecimal bigDecimalCellValue = rs.getBigDecimal(columnIndex);
+
+                    if (!rs.wasNull()) {
+                        return bigDecimalCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, bigDecimalCellValue);
+                    }
+                    return 0;
 
                 case Types.BOOLEAN:
                 case Types.BIT:
-                    return booleanCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, rs.getBoolean(columnIndex));
+                    boolean booleanCellValue = rs.getBoolean(columnIndex);
+
+                    if (!rs.wasNull()) {
+                        return booleanCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, booleanCellValue);
+                    }
+                    return 0;
 
                 case Types.OTHER:
                 default:
-                    return objectCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, rs.getObject(columnIndex));
+                    Object objectCellValue = rs.getObject(columnIndex);
+
+                    if (!rs.wasNull()) {
+                        return objectCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, objectCellValue);
+                    }
+                    return 0;
             }
         }
 
