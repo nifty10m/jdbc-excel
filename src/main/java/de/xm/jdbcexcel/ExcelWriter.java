@@ -75,12 +75,12 @@ public class ExcelWriter {
         }
     }
 
-    protected boolean checkParameterCount(String sqlStatement, int actualParameterCount) {
+    private boolean checkParameterCount(String sqlStatement, int actualParameterCount) {
         int paramCount = StringUtils.countOccurrencesOf(sqlStatement, "?");
         return paramCount == actualParameterCount;
     }
 
-    protected byte[] createByteArray(SXSSFWorkbook workbook) throws IOException {
+    private byte[] createByteArray(SXSSFWorkbook workbook) throws IOException {
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream(1_000_000)) {
             workbook.write(stream);
 
@@ -90,7 +90,7 @@ public class ExcelWriter {
         }
     }
 
-    protected void addTab(SXSSFWorkbook workbook, SXSSFSheet exportSheet, String sql, Object[] arguments) {
+    private void addTab(SXSSFWorkbook workbook, SXSSFSheet exportSheet, String sql, Object[] arguments) {
         log.info("Adding tab for query '{}' to export", sql);
         template.query(
             sql,
@@ -104,13 +104,13 @@ public class ExcelWriter {
         private final SXSSFWorkbook workbook;
         private final SXSSFSheet exportSheet;
 
-        protected final DateCellWriter dateCellWriter;
-        protected final StringCellWriter stringCellWriter;
-        protected final ReplaceableStringCellWriter replaceableStringCellWriter;
-        protected final NumberCellWriter numberCellWriter;
-        protected final BigDecimalCellWriter bigDecimalCellWriter;
-        protected final ObjectCellWriter objectCellWriter;
-        protected final BooleanCellWriter booleanCellWriter;
+        private final DateCellWriter dateCellWriter;
+        private final StringCellWriter stringCellWriter;
+        private final ReplaceableStringCellWriter replaceableStringCellWriter;
+        private final NumberCellWriter numberCellWriter;
+        private final BigDecimalCellWriter bigDecimalCellWriter;
+        private final ObjectCellWriter objectCellWriter;
+        private final BooleanCellWriter booleanCellWriter;
 
         private int[] maxColumnWidths;
 
@@ -148,7 +148,7 @@ public class ExcelWriter {
             }
         }
 
-        protected void writeHeaderRow(ResultSetMetaData metaData, int[] maxColumnWidths) throws
+        private void writeHeaderRow(ResultSetMetaData metaData, int[] maxColumnWidths) throws
             SQLException {
 
             SXSSFRow headerRow = exportSheet.createRow(0);
@@ -192,7 +192,12 @@ public class ExcelWriter {
                     String stringCellValue = rs.getString(columnIndex);
 
                     if (!rs.wasNull()) {
-                        return replaceableStringCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, stringCellValue);
+                        return replaceableStringCellWriter.writeCellValue(
+                            workbook,
+                            excelRow,
+                            columnIndex - 1,
+                            stringCellValue
+                        );
                     }
                     return 0;
 
@@ -204,7 +209,12 @@ public class ExcelWriter {
                     Date dateCellValue = rs.getDate(columnIndex);
 
                     if (!rs.wasNull()) {
-                        return dateCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, dateCellValue);
+                        return dateCellWriter.writeCellValue(
+                            workbook,
+                            excelRow,
+                            columnIndex - 1,
+                            dateCellValue
+                        );
                     }
                     return 0;
 
@@ -217,7 +227,12 @@ public class ExcelWriter {
                     double doubleCellValue = rs.getDouble(columnIndex);
 
                     if (!rs.wasNull()) {
-                        return numberCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, doubleCellValue);
+                        return numberCellWriter.writeCellValue(
+                            workbook,
+                            excelRow,
+                            columnIndex - 1,
+                            doubleCellValue
+                        );
                     }
                     return 0;
 
@@ -226,7 +241,12 @@ public class ExcelWriter {
                     BigDecimal bigDecimalCellValue = rs.getBigDecimal(columnIndex);
 
                     if (!rs.wasNull()) {
-                        return bigDecimalCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, bigDecimalCellValue);
+                        return bigDecimalCellWriter.writeCellValue(
+                            workbook,
+                            excelRow,
+                            columnIndex - 1,
+                            bigDecimalCellValue
+                        );
                     }
                     return 0;
 
@@ -235,7 +255,12 @@ public class ExcelWriter {
                     boolean booleanCellValue = rs.getBoolean(columnIndex);
 
                     if (!rs.wasNull()) {
-                        return booleanCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, booleanCellValue);
+                        return booleanCellWriter.writeCellValue(
+                            workbook,
+                            excelRow,
+                            columnIndex - 1,
+                            booleanCellValue
+                        );
                     }
                     return 0;
 
@@ -244,7 +269,12 @@ public class ExcelWriter {
                     Object objectCellValue = rs.getObject(columnIndex);
 
                     if (!rs.wasNull()) {
-                        return objectCellWriter.writeCellValue(workbook, excelRow, columnIndex - 1, objectCellValue);
+                        return objectCellWriter.writeCellValue(
+                            workbook,
+                            excelRow,
+                            columnIndex - 1,
+                            objectCellValue
+                        );
                     }
                     return 0;
             }
