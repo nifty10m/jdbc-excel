@@ -1,14 +1,13 @@
 package de.xm.jdbcexcel.cellwriters;
 
 import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.DataFormat;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Workbook;
 
 public abstract class AbstractCellWriter<T> implements CellWriter<T> {
-    protected static final DataFormatter DATA_FORMATTER= new DataFormatter();
 
+    protected static final DataFormatter DATA_FORMATTER = new DataFormatter();
 
     @Override
     public int writeCellValue(Workbook workbook, Row row, int cellIndex, T cellValue) {

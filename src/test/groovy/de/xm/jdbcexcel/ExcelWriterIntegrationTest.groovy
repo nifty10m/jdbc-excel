@@ -88,14 +88,13 @@ class ExcelWriterIntegrationTest extends Specification {
       }
 
     when:
-      def thenMilis = System.currentTimeMillis()
       def bytes = excel.createExcel(ExcelTab.of("Default", """
-      SELECT * FROM inventory i JOIN store s on i.store_id = s.store_id JOIN staff sf on sf.store_id = s.store_id;
+      SELECT * FROM inventory i
+        JOIN store s
+          ON i.store_id = s.store_id
+        JOIN staff sf
+          ON sf.store_id = s.store_id;
       """))
-      def nowMilis = System.currentTimeMillis()
-      def elapsed =  nowMilis - thenMilis;
-
-      println("Elapsed time: $elapsed ms")
 
       file << bytes
     then:
@@ -125,6 +124,39 @@ class ExcelWriterIntegrationTest extends Specification {
 
     cleanup:
       file.delete()
+  }
+
+  def "Check double export to avoid invalid date cell style reuse"() {
+    given:
+      def wb1 = new File("workbook1.xlsx")
+      if (wb1.exists()) {
+        wb1.delete()
+      }
+
+      def wb2 = new File("workbook2.xlsx")
+      if (wb2.exists()) {
+        wb2.delete()
+      }
+
+    when:
+      def bytes1 = excel.createExcel(ExcelTab.of("Default", """
+      SELECT payment_date FROM payment;
+      """))
+
+      wb1 << bytes1
+
+      def bytes2 = excel.createExcel(ExcelTab.of("Default", """
+      SELECT payment_date FROM payment;
+      """))
+
+      wb2 << bytes2
+    then:
+      wb1.size()
+      wb2.size()
+
+    cleanup:
+      wb1.delete()
+      wb2.delete()
   }
 
   def "Check reading of a single line with prepared statement"() {
