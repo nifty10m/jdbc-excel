@@ -81,12 +81,12 @@ publishing {
             artifact sourcesJar
             artifact javadocJar
             groupId 'com.newcubator'
-            artifactId 'jdbc-excel'
+            artifactId 'jdbc-excel-converter'
             version project.getVersion()
             pom.withXml {
                 def root = asNode()
                 root.appendNode('description', 'A library to create excel from jdbc')
-                root.appendNode('name', 'jdbc-excel')
+                root.appendNode('name', 'jdbc-excel-converter')
                 root.appendNode('url', 'https://github.com/newcubator/jdbc-excel')
                 root.children().last() + pomConfig
             }
@@ -99,8 +99,8 @@ bintray {
     key = System.getenv('BINTRAY_KEY')
     publications = ['JdbcExcelPublication']
     pkg {
-        repo = 'jdbc-excel'
-        name = 'jdbc-excel'
+        repo = 'jdbc-excel-converter'
+        name = 'jdbc-excel-converter'
         userOrg = 'newcubator'
         licenses = ['MIT']
         vcsUrl = 'https://github.com/newcubator/jdbc-excel'
