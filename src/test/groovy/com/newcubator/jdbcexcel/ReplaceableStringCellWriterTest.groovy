@@ -1,6 +1,6 @@
-package de.xm.jdbcexcel
+package com.newcubator.jdbcexcel
 
-import de.xm.jdbcexcel.cellwriters.ReplaceableStringCellWriter
+import com.newcubator.jdbcexcel.cellwriters.ReplaceableStringCellWriter
 import spock.lang.Specification
 
 
