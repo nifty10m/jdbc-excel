@@ -2,6 +2,15 @@ package de.xm.jdbcexcel;
 
 import static java.util.Collections.emptyMap;
 
+import de.xm.jdbcexcel.cellwriters.BigDecimalCellWriter;
+import de.xm.jdbcexcel.cellwriters.BooleanCellWriter;
+import de.xm.jdbcexcel.cellwriters.DateCellWriter;
+import de.xm.jdbcexcel.cellwriters.NumberCellWriter;
+import de.xm.jdbcexcel.cellwriters.ObjectCellWriter;
+import de.xm.jdbcexcel.cellwriters.ReplaceableStringCellWriter;
+import de.xm.jdbcexcel.cellwriters.StringCellWriter;
+import de.xm.jdbcexcel.tabs.ExcelTab;
+
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.xssf.streaming.SXSSFRow;
 import org.apache.poi.xssf.streaming.SXSSFSheet;
@@ -10,17 +19,16 @@ import org.springframework.jdbc.core.ArgumentPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.lang.NonNull;
-import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
+import java.sql.Types;
 import java.util.List;
 import java.util.Map;
 
@@ -30,8 +38,7 @@ public class ExcelWriter {
     public static final int ROWS_IN_MEMORY = 500;
 
     protected final JdbcTemplate template;
-    protected final LinkedHashMap<Class<?>, CellWriter> writers;
-    protected final Map<String, Class<?>> resolvedColumnTypes;
+    protected final Map<String, String> stringReplacements;
 
     public ExcelWriter(JdbcTemplate template) {
         this(template, emptyMap());
@@ -39,14 +46,7 @@ public class ExcelWriter {
 
     public ExcelWriter(JdbcTemplate template, Map<String, String> replacements) {
         this.template = template;
-        writers = new LinkedHashMap<>();
-        writers.put(java.util.Date.class, new DateCellWriter());
-        writers.put(java.sql.Date.class, new SqlDateCellWriter());
-        writers.put(String.class, new ReplaceableStringCellWriter(replacements));
-        writers.put(BigDecimal.class, new BigDecimalCellWriter());
-        writers.put(Number.class, new NumberCellWriter());
-
-        resolvedColumnTypes = new HashMap<>();
+        this.stringReplacements = replacements;
     }
 
     public byte[] createExcel(ExcelTab exportTab) throws IOException {
@@ -57,20 +57,17 @@ public class ExcelWriter {
         try (SXSSFWorkbook workbook = new SXSSFWorkbook(ROWS_IN_MEMORY)) {
             exportTabs.forEach((tab) -> {
                 log.debug("Adding sheet {}", tab.getName());
-                SXSSFSheet fieldSheet = workbook.createSheet(tab.getName());
-                fieldSheet.trackAllColumnsForAutoSizing();
-                List<Object> arguments = tab.getParameter();
 
-                String sqlStatement = tab.getSql();
-                int paramCount = 0;
-                for (int start = sqlStatement.indexOf('?'); start >= 0; start = sqlStatement.indexOf('?', start + 1)) {
-                    paramCount++;
-                }
-                if (paramCount == arguments.size()) {
+                SXSSFSheet fieldSheet = workbook.createSheet(tab.getName());
+
+                List<Object> arguments = tab.getParameter();
+                String sql = tab.getSql();
+
+                if (checkParameterCount(sql, arguments.size())) {
                     log.debug("Adding {} as parameters to query", arguments);
-                    addTab(workbook, fieldSheet, sqlStatement, arguments.toArray());
+                    addTab(workbook, fieldSheet, sql, arguments.toArray());
                 } else {
-                    log.warn("Unable to add sheet {} cause {} are required but {} given", tab, arguments, paramCount);
+                    log.warn("Unable to add sheet {} cause {} are required but {} given", tab, arguments, arguments.size());
                 }
             });
 
@@ -78,19 +75,27 @@ public class ExcelWriter {
         }
     }
 
-    protected byte[] createByteArray(SXSSFWorkbook workbook) throws IOException {
+    private boolean checkParameterCount(String sqlStatement, int actualParameterCount) {
+        int paramCount = StringUtils.countOccurrencesOf(sqlStatement, "?");
+        return paramCount == actualParameterCount;
+    }
+
+    private byte[] createByteArray(SXSSFWorkbook workbook) throws IOException {
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream(1_000_000)) {
             workbook.write(stream);
+
+            workbook.dispose();
+
             return stream.toByteArray();
         }
     }
 
-    protected void addTab(SXSSFWorkbook workbook, SXSSFSheet exportSheet, String sql, Object[] arguments) {
+    private void addTab(SXSSFWorkbook workbook, SXSSFSheet exportSheet, String sql, Object[] arguments) {
         log.info("Adding tab for query '{}' to export", sql);
         template.query(
             sql,
             new ArgumentPreparedStatementSetter(arguments),
-            new ExportCallbackHandler(workbook, exportSheet, writers, resolvedColumnTypes)
+            new ExportCallbackHandler(workbook, exportSheet, stringReplacements)
         );
     }
 
@@ -98,88 +103,200 @@ public class ExcelWriter {
 
         private final SXSSFWorkbook workbook;
         private final SXSSFSheet exportSheet;
-        final LinkedHashMap<Class<?>, CellWriter> writers;
-        final Map<String, Class<?>> resolvedColumnTypes;
+
+        private final DateCellWriter dateCellWriter;
+        private final StringCellWriter stringCellWriter;
+        private final ReplaceableStringCellWriter replaceableStringCellWriter;
+        private final NumberCellWriter numberCellWriter;
+        private final BigDecimalCellWriter bigDecimalCellWriter;
+        private final ObjectCellWriter objectCellWriter;
+        private final BooleanCellWriter booleanCellWriter;
+
+        private int[] maxColumnWidths;
 
         ExportCallbackHandler(SXSSFWorkbook workbook,
                               SXSSFSheet exportSheet,
-                              LinkedHashMap<Class<?>, CellWriter> writers,
-                              Map<String, Class<?>> resolvedColumnTypes) {
+                              Map<String, String> replacements) {
             this.workbook = workbook;
             this.exportSheet = exportSheet;
-            this.writers = writers;
-            this.resolvedColumnTypes = resolvedColumnTypes;
+
+            this.dateCellWriter = new DateCellWriter();
+            this.stringCellWriter = new StringCellWriter();
+            this.replaceableStringCellWriter = new ReplaceableStringCellWriter(replacements);
+            this.numberCellWriter = new NumberCellWriter();
+            this.bigDecimalCellWriter = new BigDecimalCellWriter();
+            this.objectCellWriter = new ObjectCellWriter();
+            this.booleanCellWriter = new BooleanCellWriter();
         }
 
         @Override
         public void processRow(@NonNull ResultSet rs) throws SQLException {
             ResultSetMetaData metaData = rs.getMetaData();
-            int row = rs.getRow();
-            log.trace("Adding row {} to excel sheet", row);
-            SXSSFRow excelRow = exportSheet.createRow(row);
-            int columns = metaData.getColumnCount();
-            SXSSFRow headerRow = null;
-            if (row == 1) {
-                headerRow = exportSheet.createRow(0);
+
+            int rowIndex = rs.getRow();
+            log.trace("Adding row {} to excel sheet", rowIndex);
+
+            if (rowIndex == 1) {
+                maxColumnWidths = new int[metaData.getColumnCount()];
+                writeHeaderRow(metaData, maxColumnWidths);
             }
-            for (int i = 0; i < columns; i++) {
-                writeRow(rs, metaData, row, excelRow, headerRow, i);
-            }
-            if (row == 499 || (row < 499 && rs.isLast())) {
-                log.info("Resizing first {} rows ", row);
-                resizeRows(columns, exportSheet);
+
+            writeRow(rs, metaData, maxColumnWidths);
+
+            if (rs.isLast()) {
+                resizeRows(exportSheet, maxColumnWidths);
             }
         }
 
-        private <T> void writeRow(@NonNull ResultSet rs,
-                                  ResultSetMetaData metaData,
-                                  int row,
-                                  SXSSFRow excelRow,
-                                  SXSSFRow headerRow,
-                                  int i) throws SQLException {
-            if (row == 1) {
-                createHeaderColumn(metaData, headerRow, i, workbook);
-            }
-            String className = metaData.getColumnClassName(i + 1);
-            Class<T> clazz = resolveClassByName(className);
-            T object = rs.getObject(i + 1, clazz);
-            CellWriter<T> writer = findCellWriter(clazz);
-            log.trace("Found {} for {}", writer.getClass().getSimpleName(), clazz);
-            writer.writeCellValue(workbook, excelRow, i, object);
-        }
-
-        @SuppressWarnings("unchecked")
-        private <T> Class<T> resolveClassByName(String className) {
-            return (Class<T>) resolvedColumnTypes.computeIfAbsent(className,
-                absentClassName -> ClassUtils.resolveClassName(className, this.getClass().getClassLoader()));
-        }
-
-        protected void createHeaderColumn(ResultSetMetaData metaData, SXSSFRow headerRow, int column, SXSSFWorkbook workbook) throws
+        private void writeHeaderRow(ResultSetMetaData metaData, int[] maxColumnWidths) throws
             SQLException {
-            String columnName = metaData.getColumnName(column + 1);
-            String columnLabel = metaData.getColumnLabel(column + 1);
-            String columnHeader = StringUtils.isEmpty(columnLabel) ? columnName : columnLabel;
-            log.debug("Adding column {}", columnHeader);
-            StringCellWriter headerCellWriter = new StringCellWriter();
-            headerCellWriter.writeCellValue(workbook, headerRow, column, columnHeader);
-        }
 
-        protected void resizeRows(int columns, SXSSFSheet exportSheet) {
-            for (int i = 0; i < columns; i++) {
-                exportSheet.autoSizeColumn(i);
+            SXSSFRow headerRow = exportSheet.createRow(0);
+
+            for (int i = 1; i <= metaData.getColumnCount(); i++) {
+                String columnHeader = metaData.getColumnLabel(i);
+
+                // header row is always first so we dont have to worry about overwriting something
+                maxColumnWidths[i - 1] = columnHeader.length();
+
+                stringCellWriter.writeCellValue(workbook, headerRow, i - 1, columnHeader);
             }
-            exportSheet.untrackAllColumnsForAutoSizing();
         }
 
-        @SuppressWarnings("unchecked")
-        private <T> CellWriter<T> findCellWriter(Class<T> clazz) {
-            return writers.computeIfAbsent(clazz,
-                absentClazz -> writers.entrySet().stream()
-                    .filter(entry -> entry.getKey().isAssignableFrom(absentClazz))
-                    .map(Map.Entry::getValue)
-                    .findFirst()
-                    .orElseGet(ObjectCellWriter::new)
-            );
+        private void writeRow(ResultSet rs, ResultSetMetaData metaData, int[] maxColumnWidths) throws SQLException {
+            SXSSFRow excelRow = exportSheet.createRow(rs.getRow());
+
+            for (int i = 1; i <= metaData.getColumnCount(); i++) {
+                maxColumnWidths[i - 1] = Math.max(
+                    maxColumnWidths[i - 1],
+                    writeCellValueWithWriter(rs, metaData, excelRow, i)
+                );
+            }
+        }
+
+        /**
+         * Writes a cell value identified by the current row and columnIndex to the excel sheet
+         * and returns the length of the written value in characters
+         */
+        private int writeCellValueWithWriter(ResultSet rs, ResultSetMetaData metaData, SXSSFRow excelRow, int columnIndex) throws
+            SQLException {
+
+            switch (metaData.getColumnType(columnIndex)) {
+                case Types.NULL:
+                    return 0;
+
+                case Types.VARCHAR:
+                case Types.CHAR:
+                case Types.LONGVARCHAR:
+                case Types.LONGNVARCHAR:
+                    String stringCellValue = rs.getString(columnIndex);
+
+                    if (!rs.wasNull()) {
+                        return replaceableStringCellWriter.writeCellValue(
+                            workbook,
+                            excelRow,
+                            columnIndex - 1,
+                            stringCellValue
+                        );
+                    }
+                    return 0;
+
+                case Types.DATE:
+                case Types.TIMESTAMP:
+                case Types.TIMESTAMP_WITH_TIMEZONE:
+                case Types.TIME:
+                case Types.TIME_WITH_TIMEZONE:
+                    Date dateCellValue = rs.getDate(columnIndex);
+
+                    if (!rs.wasNull()) {
+                        return dateCellWriter.writeCellValue(
+                            workbook,
+                            excelRow,
+                            columnIndex - 1,
+                            dateCellValue
+                        );
+                    }
+                    return 0;
+
+                case Types.DOUBLE:
+                case Types.INTEGER:
+                case Types.SMALLINT:
+                case Types.DECIMAL:
+                case Types.FLOAT:
+                case Types.TINYINT:
+                    double doubleCellValue = rs.getDouble(columnIndex);
+
+                    if (!rs.wasNull()) {
+                        return numberCellWriter.writeCellValue(
+                            workbook,
+                            excelRow,
+                            columnIndex - 1,
+                            doubleCellValue
+                        );
+                    }
+                    return 0;
+
+                case Types.BIGINT:
+                case Types.NUMERIC:
+                    BigDecimal bigDecimalCellValue = rs.getBigDecimal(columnIndex);
+
+                    if (!rs.wasNull()) {
+                        return bigDecimalCellWriter.writeCellValue(
+                            workbook,
+                            excelRow,
+                            columnIndex - 1,
+                            bigDecimalCellValue
+                        );
+                    }
+                    return 0;
+
+                case Types.BOOLEAN:
+                case Types.BIT:
+                    boolean booleanCellValue = rs.getBoolean(columnIndex);
+
+                    if (!rs.wasNull()) {
+                        return booleanCellWriter.writeCellValue(
+                            workbook,
+                            excelRow,
+                            columnIndex - 1,
+                            booleanCellValue
+                        );
+                    }
+                    return 0;
+
+                case Types.OTHER:
+                default:
+                    Object objectCellValue = rs.getObject(columnIndex);
+
+                    if (!rs.wasNull()) {
+                        return objectCellWriter.writeCellValue(
+                            workbook,
+                            excelRow,
+                            columnIndex - 1,
+                            objectCellValue
+                        );
+                    }
+                    return 0;
+            }
+        }
+
+        private void resizeRows(SXSSFSheet exportSheet, int[] maxColumnWidths) {
+            for (int i = 0; i < maxColumnWidths.length; i++) {
+                exportSheet.setColumnWidth(i, calculateColumnWidth(maxColumnWidths[i]));
+            }
+        }
+
+        /**
+         * Resize columns based on an estimated font width.
+         * Since Apache poi uses font measuring (ew), autotracking colun widths gets increasingly
+         * expensive if the count of rows grows that the measuring is based on. Additionally, we now have an
+         * implicit dependency on fonts being available to base our measurement on.
+         * This little formula just estimates the column width, which is good enough for our usecases.
+         * <p>
+         * https://stackoverflow.com/questions/18983203/how-to-speed-up-autosizing-columns-in-apache-poi#answer-19007294
+         */
+        private int calculateColumnWidth(int charCount) {
+            return ((int) (charCount * 1.14388)) * 256;
         }
     }
 }
