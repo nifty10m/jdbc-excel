@@ -1,4 +1,4 @@
-package de.xm.jdbcexcel.cellwriters;
+package com.newcubator.jdbcexcel.cellwriters;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.common.usermodel.HyperlinkType;

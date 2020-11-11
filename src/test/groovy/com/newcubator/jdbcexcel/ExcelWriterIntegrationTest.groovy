@@ -1,6 +1,6 @@
-package de.xm.jdbcexcel
+package com.newcubator.jdbcexcel
 
-import de.xm.jdbcexcel.tabs.ExcelTab
+import com.newcubator.jdbcexcel.tabs.ExcelTab
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.data.jdbc.DataJdbcTest
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase

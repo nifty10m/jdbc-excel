@@ -1,7 +1,6 @@
-package de.xm.jdbcexcel.cellwriters;
+package com.newcubator.jdbcexcel.cellwriters;
 
 import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Workbook;
 
 public class NumberCellWriter extends AbstractCellWriter<Number> {

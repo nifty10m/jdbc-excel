@@ -1,4 +1,4 @@
-package de.xm.jdbcexcel
+package com.newcubator.jdbcexcel
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 
