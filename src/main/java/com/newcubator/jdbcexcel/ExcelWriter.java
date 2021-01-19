@@ -36,6 +36,9 @@ import java.util.Map;
 public class ExcelWriter {
 
     public static final int ROWS_IN_MEMORY = 500;
+
+    // More then 100 characters are probably not necessary
+    // Results in a column width of 114
     public static final int MAX_COLUMN_WIDTH_CHARS = 100;
 
     protected final JdbcTemplate template;
