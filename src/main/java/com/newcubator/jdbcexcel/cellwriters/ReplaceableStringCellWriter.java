@@ -1,4 +1,4 @@
-package de.xm.jdbcexcel.cellwriters;
+package com.newcubator.jdbcexcel.cellwriters;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -7,7 +7,6 @@ import org.springframework.util.StringUtils;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Slf4j
 public class ReplaceableStringCellWriter extends StringCellWriter {
