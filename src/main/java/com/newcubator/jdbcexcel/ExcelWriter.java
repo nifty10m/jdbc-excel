@@ -37,6 +37,10 @@ public class ExcelWriter {
 
     public static final int ROWS_IN_MEMORY = 500;
 
+    // More then 100 characters are probably not necessary
+    // Results in a column width of 114
+    public static final int MAX_COLUMN_WIDTH_CHARS = 100;
+
     protected final JdbcTemplate template;
     protected final Map<String, String> stringReplacements;
 
@@ -281,8 +285,15 @@ public class ExcelWriter {
         }
 
         private void resizeRows(SXSSFSheet exportSheet, int[] maxColumnWidths) {
+            int maxColumnWidth = calculateColumnWidth(MAX_COLUMN_WIDTH_CHARS);
+
             for (int i = 0; i < maxColumnWidths.length; i++) {
-                exportSheet.setColumnWidth(i, calculateColumnWidth(maxColumnWidths[i]));
+                int columnWidth = Math.min(
+                    maxColumnWidth,
+                    calculateColumnWidth(maxColumnWidths[i])
+                );
+
+                exportSheet.setColumnWidth(i, columnWidth);
             }
         }
 
