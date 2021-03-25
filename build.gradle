@@ -2,7 +2,7 @@ plugins {
     id 'groovy'
     id 'java-library'
     id 'maven-publish'
-    id "com.jfrog.bintray" version "1.8.4"
+    id 'signing'
     id 'com.palantir.git-version' version '0.12.2'
 }
 
@@ -54,26 +54,6 @@ task sourcesJar(type: Jar) {
     from sourceSets.main.allSource
 }
 
-def pomConfig = {
-    licenses {
-        license {
-            name "MIT License"
-            url "http://www.opensource.org/licenses/mit-license.php"
-        }
-    }
-    developers {
-        developer {
-            id "terrible_herbst"
-            name "Joerg Herbst"
-            email "joerg.herbst@newcubator.de"
-        }
-    }
-
-    scm {
-        url "https://github.com/newcubator/jdbc-excel"
-    }
-}
-
 publishing {
     publications {
         JdbcExcelPublication(MavenPublication) {
@@ -83,32 +63,48 @@ publishing {
             groupId 'com.newcubator'
             artifactId 'jdbc-excel-converter'
             version project.getVersion()
-            pom.withXml {
-                def root = asNode()
-                root.appendNode('description', 'A library to create excel from jdbc')
-                root.appendNode('name', 'jdbc-excel-converter')
-                root.appendNode('url', 'https://github.com/newcubator/jdbc-excel')
-                root.children().last() + pomConfig
+            pom {
+                name = 'jdbc-excel-converter'
+                description = 'A library to create excel from jdbc'
+                url = 'https://github.com/newcubator/jdbc-excel'
+                licenses {
+                    license {
+                        name = "MIT License"
+                        url =  "http://www.opensource.org/licenses/mit-license.php"
+                    }
+                }
+                developers {
+                    developer {
+                        id = "terrible_herbst"
+                        name = "Joerg Herbst"
+                        email = "joerg.herbst@newcubator.de"
+                    }
+                }
+
+                scm {
+                    connection = "scm:git:git://github.com/newcubator/jdbc-excel.git"
+                    developerConnection = "scm:git:ssh://git@github.com:newcubator/jdbc-excel.git"
+                    url = "https://www.github.com/newcubator/jdbc-excel"
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            def snapshotRepoUrl =  "https://s01.oss.sonatype.org/content/repositories/snapshots/"
+            def releaseRepoUrl = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+            url = version.matches("\\d\\.\\d\\.\\d") ? releaseRepoUrl : snapshotRepoUrl
+            credentials {
+                username System.getenv("SONATYPE_USER")
+                password System.getenv("SONATYPE_PASSWORD")
             }
         }
     }
 }
 
-bintray {
-    user = System.getenv('BINTRAY_USER')
-    key = System.getenv('BINTRAY_KEY')
-    publications = ['JdbcExcelPublication']
-    pkg {
-        repo = 'jdbc-excel-converter'
-        name = 'jdbc-excel-converter'
-        userOrg = 'newcubator'
-        licenses = ['MIT']
-        vcsUrl = 'https://github.com/newcubator/jdbc-excel'
-        version {
-            name = project.getVersion()
-            desc = 'A library to create excel from jdbc'
-            released = new Date()
-            vcsTag = project.getVersion()
-        }
-    }
+signing {
+    def signingKey = System.getenv("SIGNING_KEY")
+    def signingPassword = System.getenv("SIGNING_PASSWORD")
+    useInMemoryPgpKeys(signingKey, signingPassword)
+    sign publishing.publications.JdbcExcelPublication
 }
