@@ -56,15 +56,15 @@ task sourcesJar(type: Jar) {
 
 publishing {
     publications {
-        JdbcExcelPublication(MavenPublication) {
+        JdbcExcel(MavenPublication) {
             from components.java
             artifact sourcesJar
             artifact javadocJar
             groupId 'com.newcubator'
-            artifactId 'jdbc-excel-converter'
+            artifactId 'jdbc-excel'
             version project.getVersion()
             pom {
-                name = 'jdbc-excel-converter'
+                name = 'jdbc-excel'
                 description = 'A library to create excel from jdbc'
                 url = 'https://github.com/newcubator/jdbc-excel'
                 licenses {
@@ -106,5 +106,5 @@ signing {
     def signingKey = System.getenv("SIGNING_KEY")
     def signingPassword = System.getenv("SIGNING_PASSWORD")
     useInMemoryPgpKeys(signingKey, signingPassword)
-    sign publishing.publications.JdbcExcelPublication
+    sign publishing.publications.JdbcExcel
 }
