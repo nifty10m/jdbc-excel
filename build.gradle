@@ -4,6 +4,7 @@ plugins {
     id 'maven-publish'
     id 'signing'
     id 'com.palantir.git-version' version '0.12.2'
+    id 'io.codearte.nexus-staging' version '0.30.0'
 }
 
 repositories {
@@ -100,6 +101,12 @@ publishing {
             }
         }
     }
+}
+
+nexusStaging {
+    serverUrl "https://s01.oss.sonatype.org/service/local/"
+    username System.getenv("SONATYPE_USER")
+    password System.getenv("w")
 }
 
 signing {
