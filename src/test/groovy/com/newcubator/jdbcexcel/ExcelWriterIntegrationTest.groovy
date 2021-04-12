@@ -161,7 +161,7 @@ class ExcelWriterIntegrationTest extends Specification {
 
   def "Check reading of a single line with prepared statement"() {
     given:
-      def file = new File("one-line.xlsx")
+      def file = new File("prepared.xlsx")
       if (file.exists()) {
         file.delete()
       }
@@ -200,6 +200,31 @@ class ExcelWriterIntegrationTest extends Specification {
        WHERE last_name LIKE '%LI%'
       ORDER BY last_name, first_name;
       """))
+      file << bytes
+    then:
+      file.size()
+
+    cleanup:
+      file.delete()
+  }
+
+  def "Check creation of hint texts"() {
+    given:
+      def file = new File("hint-text.xlsx")
+      if (file.exists()) {
+        file.delete()
+      }
+      def excel = new ExcelWriter(jdbcTemplate)
+    when:
+      def bytes = excel.createExcel(ExcelTab.of("Default", """
+      SELECT actor_id, first_name, last_name 
+        FROM actor
+       WHERE last_name LIKE '%LI%'
+       ORDER BY last_name, first_name;
+      """,
+        "This is a very long string that should overflow the cell width, which is" +
+          " okay since the cell after that has no data."
+      ))
       file << bytes
     then:
       file.size()

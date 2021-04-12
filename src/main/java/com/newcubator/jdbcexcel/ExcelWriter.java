@@ -5,12 +5,12 @@ import static java.util.Collections.emptyMap;
 import com.newcubator.jdbcexcel.cellwriters.BigDecimalCellWriter;
 import com.newcubator.jdbcexcel.cellwriters.BooleanCellWriter;
 import com.newcubator.jdbcexcel.cellwriters.DateCellWriter;
+import com.newcubator.jdbcexcel.cellwriters.HintTextCellWriter;
 import com.newcubator.jdbcexcel.cellwriters.NumberCellWriter;
 import com.newcubator.jdbcexcel.cellwriters.ObjectCellWriter;
 import com.newcubator.jdbcexcel.cellwriters.ReplaceableStringCellWriter;
 import com.newcubator.jdbcexcel.cellwriters.StringCellWriter;
 import com.newcubator.jdbcexcel.tabs.ExcelTab;
-
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.xssf.streaming.SXSSFRow;
 import org.apache.poi.xssf.streaming.SXSSFSheet;
@@ -29,6 +29,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Types;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -69,7 +70,7 @@ public class ExcelWriter {
 
                 if (checkParameterCount(sql, arguments.size())) {
                     log.debug("Adding {} as parameters to query", arguments);
-                    addTab(workbook, fieldSheet, sql, arguments.toArray());
+                    addTab(workbook, fieldSheet, sql, arguments.toArray(), tab.getHintText());
                 } else {
                     log.warn("Unable to add sheet {} cause {} are required but {} given", tab, arguments, arguments.size());
                 }
@@ -94,12 +95,12 @@ public class ExcelWriter {
         }
     }
 
-    private void addTab(SXSSFWorkbook workbook, SXSSFSheet exportSheet, String sql, Object[] arguments) {
+    private void addTab(SXSSFWorkbook workbook, SXSSFSheet exportSheet, String sql, Object[] arguments, String hintText) {
         log.info("Adding tab for query '{}' to export", sql);
         template.query(
             sql,
             new ArgumentPreparedStatementSetter(arguments),
-            new ExportCallbackHandler(workbook, exportSheet, stringReplacements)
+            new ExportCallbackHandler(workbook, exportSheet, stringReplacements, hintText)
         );
     }
 
@@ -118,9 +119,13 @@ public class ExcelWriter {
 
         private int[] maxColumnWidths;
 
+        // Indicates at which row index the data table with database data starts
+        private int dataRowsStartIndex = 0;
+
         ExportCallbackHandler(SXSSFWorkbook workbook,
                               SXSSFSheet exportSheet,
-                              Map<String, String> replacements) {
+                              Map<String, String> replacements,
+                              String hintText) {
             this.workbook = workbook;
             this.exportSheet = exportSheet;
 
@@ -131,50 +136,66 @@ public class ExcelWriter {
             this.bigDecimalCellWriter = new BigDecimalCellWriter();
             this.objectCellWriter = new ObjectCellWriter();
             this.booleanCellWriter = new BooleanCellWriter();
+
+            if (hintText != null) {
+                writeHintTextRow(hintText);
+            }
+        }
+
+        private void writeHintTextRow(String hintText) {
+            SXSSFRow excelRow = exportSheet.createRow(dataRowsStartIndex);
+
+            new HintTextCellWriter().writeCellValue(workbook, excelRow, 0, hintText);
+
+            // Columns without data in the next column simply overflow in excel
+            // We only write into the first column, so we can ignore column widths completely for this row
+            setWrittenColumnWidth(0, 0);
+            advanceDataRowsStartBy(2);
+        }
+
+        private void writeHeaderRow(ResultSetMetaData metaData) throws
+            SQLException {
+
+            SXSSFRow headerRow = exportSheet.createRow(dataRowsStartIndex);
+
+            for (int i = 1; i <= metaData.getColumnCount(); i++) {
+                String columnHeader = metaData.getColumnLabel(i);
+
+                int writtenHeaderColumnWidth = stringCellWriter
+                    .writeCellValue(workbook, headerRow, i - 1, columnHeader);
+
+                setWrittenColumnWidth(i - 1, writtenHeaderColumnWidth);
+            }
+
+            advanceDataRowsStartBy(1);
         }
 
         @Override
         public void processRow(@NonNull ResultSet rs) throws SQLException {
             ResultSetMetaData metaData = rs.getMetaData();
 
-            int rowIndex = rs.getRow();
-            log.trace("Adding row {} to excel sheet", rowIndex);
-
-            if (rowIndex == 1) {
-                maxColumnWidths = new int[metaData.getColumnCount()];
-                writeHeaderRow(metaData, maxColumnWidths);
+            int databaseRowIndex = rs.getRow();
+            if (databaseRowIndex == 1) {
+                writeHeaderRow(metaData);
             }
 
-            writeRow(rs, metaData, maxColumnWidths);
+            writeRow(rs, metaData);
 
             if (rs.isLast()) {
                 resizeRows(exportSheet, maxColumnWidths);
             }
         }
 
-        private void writeHeaderRow(ResultSetMetaData metaData, int[] maxColumnWidths) throws
-            SQLException {
+        private void writeRow(ResultSet rs, ResultSetMetaData metaData) throws SQLException {
+            // Jdbc ResultSet row indexes are 1-based, while excel rows are 0-based
+            int excelRowIndex = dataRowsStartIndex + (rs.getRow() - 1);
+            SXSSFRow excelRow = exportSheet.createRow(excelRowIndex);
 
-            SXSSFRow headerRow = exportSheet.createRow(0);
-
-            for (int i = 1; i <= metaData.getColumnCount(); i++) {
-                String columnHeader = metaData.getColumnLabel(i);
-
-                // header row is always first so we dont have to worry about overwriting something
-                maxColumnWidths[i - 1] = columnHeader.length();
-
-                stringCellWriter.writeCellValue(workbook, headerRow, i - 1, columnHeader);
-            }
-        }
-
-        private void writeRow(ResultSet rs, ResultSetMetaData metaData, int[] maxColumnWidths) throws SQLException {
-            SXSSFRow excelRow = exportSheet.createRow(rs.getRow());
+            log.debug("Writing database tuple index {} into excel row {}", rs.getRow(), excelRowIndex);
 
             for (int i = 1; i <= metaData.getColumnCount(); i++) {
-                maxColumnWidths[i - 1] = Math.max(
-                    maxColumnWidths[i - 1],
-                    writeCellValueWithWriter(rs, metaData, excelRow, i)
-                );
+                int writtenCellValueLength = writeCellValueWithWriter(rs, metaData, excelRow, i);
+                setWrittenColumnWidth(i - 1, writtenCellValueLength);
             }
         }
 
@@ -282,6 +303,24 @@ public class ExcelWriter {
                     }
                     return 0;
             }
+        }
+
+        private void setWrittenColumnWidth(int columnIndex, int columnWidth) {
+            if (maxColumnWidths == null) {
+                maxColumnWidths = new int[columnIndex + 1];
+            }
+
+            if (columnIndex >= maxColumnWidths.length) {
+                maxColumnWidths = Arrays.copyOf(maxColumnWidths, columnIndex + 1);
+            }
+
+            if (maxColumnWidths[columnIndex] < columnWidth) {
+                maxColumnWidths[columnIndex] = columnWidth;
+            }
+        }
+
+        private void advanceDataRowsStartBy(int rows) {
+            dataRowsStartIndex += rows;
         }
 
         private void resizeRows(SXSSFSheet exportSheet, int[] maxColumnWidths) {

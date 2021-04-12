@@ -10,4 +10,5 @@ class DefaultExcelTab implements ExcelTab {
     String name;
     String sql;
     List<Object> parameter;
+    String hintText;
 }
