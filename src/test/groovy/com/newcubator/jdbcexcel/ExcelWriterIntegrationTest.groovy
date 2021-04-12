@@ -1,6 +1,6 @@
-package de.xm.jdbcexcel
+package com.newcubator.jdbcexcel
 
-import de.xm.jdbcexcel.tabs.ExcelTab
+import com.newcubator.jdbcexcel.tabs.ExcelTab
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.data.jdbc.DataJdbcTest
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase
@@ -206,5 +206,45 @@ class ExcelWriterIntegrationTest extends Specification {
 
     cleanup:
       file.delete()
+  }
+
+  def "Check export of very long string"() {
+    given:
+      // This will definitely be above the max column width
+      def str = generateRandomString(256)
+
+      def file = new File("long-string.xlsx")
+      if (file.exists()) {
+        file.delete()
+      }
+      def excel = new ExcelWriter(jdbcTemplate)
+
+    when:
+      def bytes = excel.createExcel(ExcelTab.of("Default", """
+      SELECT '$str' AS long_string;
+      """))
+      file << bytes
+
+    then:
+      file.size()
+
+    and:
+      noExceptionThrown()
+
+    cleanup:
+      file.delete()
+  }
+
+  String generateRandomString(int width) {
+    final char[] chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray()
+    final Random random = new Random()
+
+    char[] buf = new char[width]
+
+    for (int i = 0; i < buf.length; ++i) {
+      buf[i] = chars[random.nextInt(chars.length)]
+    }
+
+    return new String(buf)
   }
 }

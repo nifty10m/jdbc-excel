@@ -1,4 +1,4 @@
-package de.xm.jdbcexcel.cellwriters;
+package com.newcubator.jdbcexcel.cellwriters;
 
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Workbook;

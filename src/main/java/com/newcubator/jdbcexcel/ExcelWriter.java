@@ -1,15 +1,15 @@
-package de.xm.jdbcexcel;
+package com.newcubator.jdbcexcel;
 
 import static java.util.Collections.emptyMap;
 
-import de.xm.jdbcexcel.cellwriters.BigDecimalCellWriter;
-import de.xm.jdbcexcel.cellwriters.BooleanCellWriter;
-import de.xm.jdbcexcel.cellwriters.DateCellWriter;
-import de.xm.jdbcexcel.cellwriters.NumberCellWriter;
-import de.xm.jdbcexcel.cellwriters.ObjectCellWriter;
-import de.xm.jdbcexcel.cellwriters.ReplaceableStringCellWriter;
-import de.xm.jdbcexcel.cellwriters.StringCellWriter;
-import de.xm.jdbcexcel.tabs.ExcelTab;
+import com.newcubator.jdbcexcel.cellwriters.BigDecimalCellWriter;
+import com.newcubator.jdbcexcel.cellwriters.BooleanCellWriter;
+import com.newcubator.jdbcexcel.cellwriters.DateCellWriter;
+import com.newcubator.jdbcexcel.cellwriters.NumberCellWriter;
+import com.newcubator.jdbcexcel.cellwriters.ObjectCellWriter;
+import com.newcubator.jdbcexcel.cellwriters.ReplaceableStringCellWriter;
+import com.newcubator.jdbcexcel.cellwriters.StringCellWriter;
+import com.newcubator.jdbcexcel.tabs.ExcelTab;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.xssf.streaming.SXSSFRow;
@@ -36,6 +36,9 @@ import java.util.Map;
 public class ExcelWriter {
 
     public static final int ROWS_IN_MEMORY = 500;
+
+    // More then 100 characters are probably not necessary
+    // Results in a column width of 114
     public static final int MAX_COLUMN_WIDTH_CHARS = 100;
 
     protected final JdbcTemplate template;

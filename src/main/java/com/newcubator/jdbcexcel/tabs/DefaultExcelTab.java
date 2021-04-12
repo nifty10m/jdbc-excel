@@ -1,4 +1,4 @@
-package de.xm.jdbcexcel.tabs;
+package com.newcubator.jdbcexcel.tabs;
 
 import lombok.Value;
 

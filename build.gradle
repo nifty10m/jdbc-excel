@@ -2,8 +2,9 @@ plugins {
     id 'groovy'
     id 'java-library'
     id 'maven-publish'
-    id "com.jfrog.bintray" version "1.8.4"
+    id 'signing'
     id 'com.palantir.git-version' version '0.12.2'
+    id 'io.codearte.nexus-staging' version '0.30.0'
 }
 
 repositories {
@@ -40,8 +41,8 @@ dependencies {
 
     testImplementation 'org.postgresql:postgresql:42.2.5'
 
-    testCompile "org.testcontainers:spock:1.15.0-rc2"
-    testCompile "org.testcontainers:postgresql:1.15.0-rc2"
+    testCompile "org.testcontainers:spock:1.15.2"
+    testCompile "org.testcontainers:postgresql:1.15.2"
 }
 
 task javadocJar(type: Jar) {
@@ -54,61 +55,63 @@ task sourcesJar(type: Jar) {
     from sourceSets.main.allSource
 }
 
-def pomConfig = {
-    licenses {
-        license {
-            name "MIT License"
-            url "http://www.opensource.org/licenses/mit-license.php"
-        }
-    }
-    developers {
-        developer {
-            id "terrible_herbst"
-            name "Joerg Herbst"
-            email "joerg.herbst@newcubator.de"
-        }
-    }
-
-    scm {
-        url "https://github.com/newcubator/jdbc-excel"
-    }
-}
-
 publishing {
     publications {
-        JdbcExcelPublication(MavenPublication) {
+        JdbcExcel(MavenPublication) {
             from components.java
             artifact sourcesJar
             artifact javadocJar
             groupId 'com.newcubator'
             artifactId 'jdbc-excel'
             version project.getVersion()
-            pom.withXml {
-                def root = asNode()
-                root.appendNode('description', 'A library to create excel from jdbc')
-                root.appendNode('name', 'jdbc-excel')
-                root.appendNode('url', 'https://github.com/newcubator/jdbc-excel')
-                root.children().last() + pomConfig
+            pom {
+                name = 'jdbc-excel'
+                description = 'A library to create excel from jdbc'
+                url = 'https://github.com/newcubator/jdbc-excel'
+                licenses {
+                    license {
+                        name = "MIT License"
+                        url =  "http://www.opensource.org/licenses/mit-license.php"
+                    }
+                }
+                developers {
+                    developer {
+                        id = "terrible_herbst"
+                        name = "Joerg Herbst"
+                        email = "joerg.herbst@newcubator.de"
+                    }
+                }
+
+                scm {
+                    connection = "scm:git:git://github.com/newcubator/jdbc-excel.git"
+                    developerConnection = "scm:git:ssh://git@github.com:newcubator/jdbc-excel.git"
+                    url = "https://www.github.com/newcubator/jdbc-excel"
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            def snapshotRepoUrl =  "https://s01.oss.sonatype.org/content/repositories/snapshots/"
+            def releaseRepoUrl = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+            url = version.matches("\\d\\.\\d\\.\\d") ? releaseRepoUrl : snapshotRepoUrl
+            credentials {
+                username System.getenv("SONATYPE_USER")
+                password System.getenv("SONATYPE_PASSWORD")
             }
         }
     }
 }
 
-bintray {
-    user = System.getenv('BINTRAY_USER')
-    key = System.getenv('BINTRAY_KEY')
-    publications = ['JdbcExcelPublication']
-    pkg {
-        repo = 'jdbc-excel'
-        name = 'jdbc-excel'
-        userOrg = 'newcubator'
-        licenses = ['MIT']
-        vcsUrl = 'https://github.com/newcubator/jdbc-excel'
-        version {
-            name = project.getVersion()
-            desc = 'A library to create excel from jdbc'
-            released = new Date()
-            vcsTag = project.getVersion()
-        }
-    }
+nexusStaging {
+    serverUrl "https://s01.oss.sonatype.org/service/local/"
+    username System.getenv("SONATYPE_USER")
+    password System.getenv("w")
+}
+
+signing {
+    def signingKey = System.getenv("SIGNING_KEY")
+    def signingPassword = System.getenv("SIGNING_PASSWORD")
+    useInMemoryPgpKeys(signingKey, signingPassword)
+    sign publishing.publications.JdbcExcel
 }
