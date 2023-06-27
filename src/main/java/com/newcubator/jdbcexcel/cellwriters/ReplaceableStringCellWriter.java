@@ -1,5 +1,6 @@
 package com.newcubator.jdbcexcel.cellwriters;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -14,10 +15,11 @@ public class ReplaceableStringCellWriter extends StringCellWriter {
     private final Map<String, String> replacements;
 
     public ReplaceableStringCellWriter() {
-        this(Collections.emptyMap());
+        this(Collections.emptyMap(), true);
     }
 
-    public ReplaceableStringCellWriter(Map<String, String> replacements) {
+    public ReplaceableStringCellWriter(Map<String, String> replacements, boolean autogenerateHyperlinks) {
+        super(autogenerateHyperlinks);
         this.replacements = replacements;
     }
 
