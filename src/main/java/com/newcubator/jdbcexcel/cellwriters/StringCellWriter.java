@@ -1,5 +1,8 @@
 package com.newcubator.jdbcexcel.cellwriters;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.common.usermodel.HyperlinkType;
 import org.apache.poi.ss.usermodel.Cell;
@@ -7,15 +10,15 @@ import org.apache.poi.ss.usermodel.CreationHelper;
 import org.apache.poi.ss.usermodel.Hyperlink;
 import org.apache.poi.ss.usermodel.Workbook;
 
-import java.net.URI;
-import java.net.URISyntaxException;
-
 @Slf4j
+@RequiredArgsConstructor
 public class StringCellWriter extends AbstractCellWriter<String> {
+
+    private final boolean autogenerateHyperlinks;
 
     @Override
     protected int doWriteCell(Workbook workbook, Cell cell, String cellValue) {
-        if (cellValue.startsWith("http")) {
+        if (autogenerateHyperlinks && cellValue.startsWith("http")) {
             markCellAsHyperlink(workbook, cellValue, cell);
         }
 

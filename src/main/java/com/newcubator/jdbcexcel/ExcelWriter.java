@@ -10,17 +10,8 @@ import com.newcubator.jdbcexcel.cellwriters.NumberCellWriter;
 import com.newcubator.jdbcexcel.cellwriters.ObjectCellWriter;
 import com.newcubator.jdbcexcel.cellwriters.ReplaceableStringCellWriter;
 import com.newcubator.jdbcexcel.cellwriters.StringCellWriter;
+import com.newcubator.jdbcexcel.configuration.ExportConfiguration;
 import com.newcubator.jdbcexcel.tabs.ExcelTab;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.xssf.streaming.SXSSFRow;
-import org.apache.poi.xssf.streaming.SXSSFSheet;
-import org.apache.poi.xssf.streaming.SXSSFWorkbook;
-import org.springframework.jdbc.core.ArgumentPreparedStatementSetter;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowCallbackHandler;
-import org.springframework.lang.NonNull;
-import org.springframework.util.StringUtils;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -32,6 +23,15 @@ import java.sql.Types;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.xssf.streaming.SXSSFRow;
+import org.apache.poi.xssf.streaming.SXSSFSheet;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.springframework.jdbc.core.ArgumentPreparedStatementSetter;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
+import org.springframework.lang.NonNull;
+import org.springframework.util.StringUtils;
 
 @Slf4j
 public class ExcelWriter {
@@ -55,10 +55,14 @@ public class ExcelWriter {
     }
 
     public byte[] createExcel(ExcelTab exportTab) throws IOException {
-        return createExcel(List.of(exportTab));
+        return createExcel(List.of(exportTab), new ExportConfiguration());
     }
 
-    public byte[] createExcel(List<ExcelTab> exportTabs) throws IOException {
+    public byte[] createExcel(ExcelTab exportTab, ExportConfiguration exportConfiguration) throws IOException {
+        return createExcel(List.of(exportTab), exportConfiguration);
+    }
+
+    public byte[] createExcel(List<ExcelTab> exportTabs, ExportConfiguration exportConfiguration) throws IOException {
         try (SXSSFWorkbook workbook = new SXSSFWorkbook(ROWS_IN_MEMORY)) {
             exportTabs.forEach((tab) -> {
                 log.debug("Adding sheet {}", tab.getName());
@@ -70,7 +74,7 @@ public class ExcelWriter {
 
                 if (checkParameterCount(sql, arguments.size())) {
                     log.debug("Adding {} as parameters to query", arguments);
-                    addTab(workbook, fieldSheet, sql, arguments.toArray(), tab.getHintText());
+                    addTab(workbook, fieldSheet, sql, arguments.toArray(), tab.getHintText(), exportConfiguration);
                 } else {
                     log.warn("Unable to add sheet {} cause {} are required but {} given", tab, arguments, arguments.size());
                 }
@@ -95,12 +99,17 @@ public class ExcelWriter {
         }
     }
 
-    private void addTab(SXSSFWorkbook workbook, SXSSFSheet exportSheet, String sql, Object[] arguments, String hintText) {
+    private void addTab(SXSSFWorkbook workbook,
+                        SXSSFSheet exportSheet,
+                        String sql,
+                        Object[] arguments,
+                        String hintText,
+                        ExportConfiguration exportConfiguration) {
         log.info("Adding tab for query '{}' to export", sql);
         template.query(
             sql,
             new ArgumentPreparedStatementSetter(arguments),
-            new ExportCallbackHandler(workbook, exportSheet, stringReplacements, hintText)
+            new ExportCallbackHandler(workbook, exportSheet, stringReplacements, hintText, exportConfiguration)
         );
     }
 
@@ -125,12 +134,13 @@ public class ExcelWriter {
         ExportCallbackHandler(SXSSFWorkbook workbook,
                               SXSSFSheet exportSheet,
                               Map<String, String> replacements,
-                              String hintText) {
+                              String hintText,
+                              ExportConfiguration exportConfiguration) {
             this.workbook = workbook;
             this.exportSheet = exportSheet;
 
             this.dateCellWriter = new DateCellWriter();
-            this.stringCellWriter = new StringCellWriter();
+            this.stringCellWriter = new StringCellWriter(exportConfiguration.isAutogenerateHyperlinks());
             this.replaceableStringCellWriter = new ReplaceableStringCellWriter(replacements);
             this.numberCellWriter = new NumberCellWriter();
             this.bigDecimalCellWriter = new BigDecimalCellWriter();
